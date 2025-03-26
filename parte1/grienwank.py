@@ -45,6 +45,8 @@ def differential_evolution_griewank(
       - all_positions: List of arrays (num_individuals x 2) for each iteration
       - best_solution: (x, y) of best found solution
       - best_value: Griewank value at best_solution
+      - best_fit_history: List of best fitness values per iteration
+      - worst_fit_history: List of worst fitness values per iteration
     """
     lower, upper = bound
     dim = 2  # Since we are in 2D
@@ -57,6 +59,10 @@ def differential_evolution_griewank(
 
     # Store all positions per iteration
     all_positions = [population.copy()]
+    
+    # Initialize fitness history
+    best_fit_history = [np.min(fitness)]
+    worst_fit_history = [np.max(fitness)]
 
     for iteration in range(max_iter):
         new_population = np.copy(population)
@@ -85,20 +91,24 @@ def differential_evolution_griewank(
         # Update population
         population = new_population.copy()
         all_positions.append(population.copy())
+        
+        # Update fitness history
+        best_fit_history.append(np.min(fitness))
+        worst_fit_history.append(np.max(fitness))
 
     # Get the best solution found
     best_idx = np.argmin(fitness)
     best_sol = population[best_idx]
     best_val = fitness[best_idx]
 
-    return all_positions, best_sol, best_val
+    return all_positions, best_sol, best_val, best_fit_history, worst_fit_history
 
 # ====================================
 #   4) 3D Animation for Visualization
 # ====================================
 def animate_de_griewank_3d():
     # 1) Run Differential Evolution
-    all_positions, best_sol, best_val = differential_evolution_griewank(
+    all_positions, best_sol, best_val, best_fit, worst_fit = differential_evolution_griewank(
         num_individuals=30, 
         max_iter=50, 
         bound=(-10,10),
@@ -110,18 +120,30 @@ def animate_de_griewank_3d():
     # 2) Create 3D surface for visualization
     X, Y, Z = create_griewank_mesh(-10,10, -10,10, points=200)
 
-    # 3) Set up the figure
-    fig = plt.figure(figsize=(10,8))
-    ax = fig.add_subplot(111, projection='3d')
-
-    # Plot the Griewank surface
-    ax.plot_surface(X, Y, Z, cmap='viridis', alpha=0.6, edgecolor='none')
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('f(x,y)')
-
+    # 3) Set up the figures
+    fig1 = plt.figure(figsize=(8, 6))
+    fig2 = plt.figure(figsize=(8, 6))
+    
+    # 3D plot setup
+    ax1 = fig1.add_subplot(111, projection='3d')
+    ax1.plot_surface(X, Y, Z, cmap='viridis', alpha=0.6, edgecolor='none')
+    ax1.set_xlabel('x')
+    ax1.set_ylabel('y')
+    ax1.set_zlabel('f(x,y)')
+    
     # Initialize scatter for population
-    scatter = ax.scatter([], [], [], color='red', s=40)
+    scatter = ax1.scatter([], [], [], color='red', s=40)
+    
+    # Convergence plot setup
+    ax2 = fig2.add_subplot(111)
+    iterations = np.arange(len(best_fit))
+    ax2.plot(iterations, best_fit, 'b-', label='Best Fitness')
+    ax2.plot(iterations, worst_fit, 'r--', label='Worst Fitness')
+    ax2.legend()
+    ax2.set_title('Fitness Convergence')
+    ax2.set_xlabel('Iteration')
+    ax2.set_ylabel('Fitness Value')
+    ax2.grid(True)
 
     # 4) Update function for animation
     def update(frame):
@@ -132,17 +154,26 @@ def animate_de_griewank_3d():
 
         # Update the 3D scatter
         scatter._offsets3d = (x, y, z)
-        ax.set_title(f'DE on Griewank (3D) - Iter {frame+1}/{len(all_positions)}')
+        ax1.set_title(f'DE on Griewank (3D) - Iter {frame+1}/{len(all_positions)}')
         return (scatter,)
 
     # 5) Animate
-    ani = FuncAnimation(
-        fig, update, 
+    ani1 = FuncAnimation(
+        fig1, update, 
         frames=len(all_positions), 
         interval=300, 
         repeat=False
     )
-    plt.show()
+    
+    # Show both figures
+    plt.show(block=False)
+    
+    # Keep the script running until animation is complete
+    try:
+        while plt.get_fignums():
+            plt.pause(0.1)
+    except KeyboardInterrupt:
+        plt.close('all')
 
 # Run the animation
 if __name__ == "__main__":

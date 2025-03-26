@@ -8,9 +8,10 @@ from typing import List, Tuple
 # Configurações do algoritmo
 NUM_CIDADES = 20
 GERACOES = 100
-POPULACAO_SIZE = 100
-MUTACAO_CHANCE = 0.1
-ELITISMO = 2
+TAMANHO_POPULACAO = 300
+CHANCE_MUTACAO = 0.2
+ELITISMO = int(TAMANHO_POPULACAO * 0.05) # 5% da população
+NUM_COMPETIDORES = 7
 
 # Gerar coordenadas aleatórias para as cidades
 CIDADES = np.random.rand(NUM_CIDADES, 2)
@@ -39,12 +40,12 @@ def calcular_fitness(individuo: List[int]) -> float:
 
 def gerar_populacao() -> List[List[int]]:
     return [
-        random.sample(range(NUM_CIDADES), NUM_CIDADES) for _ in range(POPULACAO_SIZE)
+        random.sample(range(NUM_CIDADES), NUM_CIDADES) for _ in range(TAMANHO_POPULACAO)
     ]
 
 
 def selecao_torneio(populacao: List[List[int]]) -> List[int]:
-    competidores = random.sample(populacao, 5)
+    competidores = random.sample(populacao, NUM_COMPETIDORES)
     return max(competidores, key=calcular_fitness)
 
 
@@ -72,16 +73,17 @@ def crossover(pai1: List[int], pai2: List[int]) -> Tuple[List[int], List[int]]:
 
 
 def mutacao(individuo: List[int]):
-    if random.random() < MUTACAO_CHANCE:
+    if random.random() < CHANCE_MUTACAO:
         i, j = random.sample(range(NUM_CIDADES), 2)
         individuo[i], individuo[j] = individuo[j], individuo[i]
 
 
 # Algoritmo genético principal
 def algoritmo_genetico():
-    global historico_rotas, historico_distancias
+    global historico_rotas, historico_distancias, historico_pior_distancias
     historico_rotas = []
     historico_distancias = []
+    historico_pior_distancias = []
     populacao = gerar_populacao()
     melhor_solucao = None
     melhor_fitness = float("-inf")
@@ -90,7 +92,7 @@ def algoritmo_genetico():
         populacao = sorted(populacao, key=calcular_fitness, reverse=True)
         nova_populacao = populacao[:ELITISMO]
 
-        while len(nova_populacao) < POPULACAO_SIZE:
+        while len(nova_populacao) < TAMANHO_POPULACAO:
             pai1 = selecao_torneio(populacao)
             pai2 = selecao_torneio(populacao)
             filho1, filho2 = crossover(pai1, pai2)
@@ -98,9 +100,11 @@ def algoritmo_genetico():
             mutacao(filho2)
             nova_populacao.extend([filho1, filho2])
 
-        populacao = nova_populacao[:POPULACAO_SIZE]
+        populacao = nova_populacao[:TAMANHO_POPULACAO]
         melhor_individuo = max(populacao, key=calcular_fitness)
+        pior_individuo = min(populacao, key=calcular_fitness)
         melhor_valor = calcular_fitness(melhor_individuo)
+        pior_valor = calcular_fitness(pior_individuo)
 
         if melhor_valor > melhor_fitness:
             melhor_solucao = melhor_individuo.copy()
@@ -108,34 +112,35 @@ def algoritmo_genetico():
 
         historico_rotas.append(melhor_solucao.copy())
         historico_distancias.append(-melhor_valor)
+        historico_pior_distancias.append(-pior_valor)
 
-    return melhor_solucao, historico_rotas, historico_distancias
+    return melhor_solucao, historico_rotas, historico_distancias, historico_pior_distancias
 
 
 # Executar o algoritmo e armazenar histórico
-solucao, historico_rotas, historico_distancias = algoritmo_genetico()
+solucao, historico_rotas, historico_distancias, historico_pior_distancias = algoritmo_genetico()
 
 # Configurar a interface gráfica principal
-fig1, ax1 = plt.subplots(figsize=(10, 7), num="TSP Route Evolution")
+fig1, ax1 = plt.subplots(figsize=(10, 7), num="Evolução da Rota TSP")
 plt.subplots_adjust(bottom=0.25)
 
-# Plot city markers
+# Plotar marcadores das cidades
 ax1.scatter(CIDADES[:, 0], CIDADES[:, 1], c="blue", s=100, zorder=3)
 
-# Draw all possible edges as background
-all_edges = []
+# Desenhar todas as arestas possíveis como fundo
+todas_arestas = []
 for i in range(NUM_CIDADES):
     for j in range(i + 1, NUM_CIDADES):
-        all_edges.append([CIDADES[i], CIDADES[j]])
+        todas_arestas.append([CIDADES[i], CIDADES[j]])
 
-bg_lines = LineCollection(
-    all_edges, colors="lightgray", alpha=0.15, linewidths=1, zorder=1
+linhas_fundo = LineCollection(
+    todas_arestas, colors="lightgray", alpha=0.15, linewidths=1, zorder=1
 )
-ax1.add_collection(bg_lines)
+ax1.add_collection(linhas_fundo)
 
-# Initialize active edges collection
-active_edges = LineCollection([], colors="red", linewidths=2, alpha=0.8, zorder=2)
-ax1.add_collection(active_edges)
+# Inicializar coleção de arestas ativas
+arestas_ativas = LineCollection([], colors="red", linewidths=2, alpha=0.8, zorder=2)
+ax1.add_collection(arestas_ativas)
 
 titulo = ax1.set_title("Geração: 0 | Distância: 0.00")
 ax1.set_xlim(-0.05, 1.05)
@@ -143,23 +148,72 @@ ax1.set_ylim(-0.05, 1.05)
 ax1.set_axis_off()
 
 # Configurar gráfico de evolução
-fig2, ax2 = plt.subplots(figsize=(10, 4), num="Distance Evolution")
-ax2.set_title("Evolução da Distância")
-ax2.set_xlabel("Geração")
-ax2.set_ylabel("Distância")
-ax2.grid(True)
+fig2, ax2 = plt.subplots(figsize=(12, 6), num="Evolução da Distância", facecolor='white')
+ax2.set_facecolor('white')
 
-# Plot baseline
-generations = np.arange(1, len(historico_distancias) + 1)
-(line,) = ax2.plot(generations, historico_distancias, lw=2)
-current_marker = ax2.axvline(x=0, color="r", linestyle="--", alpha=0.7)
+# Personalizar o gráfico
+ax2.set_title("Evolução da Distância", fontsize=14, pad=15)
+ax2.set_xlabel("Geração", fontsize=12)
+ax2.set_ylabel("Distância", fontsize=12)
+ax2.tick_params(axis='both', which='major', labelsize=10)
+
+# Configurar grade
+ax2.grid(True, linestyle='--', alpha=0.3, color='gray')
+ax2.set_axisbelow(True)  # Colocar grade abaixo dos gráficos
+
+# Remover bordas superior e direita
+ax2.spines['top'].set_visible(False)
+ax2.spines['right'].set_visible(False)
+ax2.spines['left'].set_color('#333333')
+ax2.spines['bottom'].set_color('#333333')
+
+# Plotar linha base com melhores e piores distâncias com estilo melhorado
+geracoes = np.arange(1, len(historico_distancias) + 1)
+linha_melhor, = ax2.plot(geracoes, historico_distancias, 
+                      color='#1f77b4',  # Cor azul agradável
+                      lw=2.5, 
+                      label='Melhor Distância',
+                      solid_capstyle='round')
+linha_pior, = ax2.plot(geracoes, historico_pior_distancias, 
+                       color='#d62728',  # Cor vermelha agradável
+                       lw=2, 
+                       label='Pior Distância',
+                       linestyle='--',
+                       alpha=0.8,
+                       dash_capstyle='round')
+
+# Melhorar legenda
+legenda = ax2.legend(loc='upper right', 
+                   frameon=True,
+                   framealpha=0.95,
+                   edgecolor='#333333',
+                   fontsize=10)
+legenda.get_frame().set_facecolor('white')
+
+# Adicionar marcador de geração com melhor estilo
+marcador_atual = ax2.axvline(x=0, 
+                            color='#2ca02c',  # Cor verde agradável
+                            linestyle='--', 
+                            alpha=0.6,
+                            lw=1.5)
+
+# Definir melhores limites dos eixos
 ax2.set_xlim(0, len(historico_distancias))
-ax2.set_ylim(min(historico_distancias) * 0.95, max(historico_distancias) * 1.05)
+y_min = min(historico_distancias) * 0.95
+y_max = max(historico_pior_distancias) * 1.05
+ax2.set_ylim(y_min, y_max)
 
-# Criar controles na janela principal
+# Adicionar ticks menores
+ax2.minorticks_on()
+ax2.tick_params(which='minor', length=2)
+ax2.tick_params(which='major', length=4)
+
+# Ajustar layout
+plt.tight_layout()
+
 # Criar controles na janela principal
 ax_slider = fig1.add_axes((0.2, 0.1, 0.6, 0.03))
-generation_slider = Slider(
+slider_geracao = Slider(
     ax=ax_slider,
     label="Geração",
     valmin=0,
@@ -169,74 +223,76 @@ generation_slider = Slider(
 )
 
 ax_play = fig1.add_axes((0.7, 0.05, 0.1, 0.04))
-play_button = Button(ax_play, "▶")
+botao_play = Button(ax_play, "▶")
 ax_pause = fig1.add_axes((0.81, 0.05, 0.1, 0.04))
-pause_button = Button(ax_pause, "⏸")
+botao_pause = Button(ax_pause, "⏸")
+
 # Variáveis de controle
-is_playing = False
-current_frame = 0
+reproduzindo = False
+frame_atual = 0
 
 
 # Funções de atualização
-def update_slider(val):
-    global current_frame
-    current_frame = int(generation_slider.val)
-    update_plot(current_frame)
+def atualizar_slider(val):
+    global frame_atual
+    frame_atual = int(slider_geracao.val)
+    atualizar_grafico(frame_atual)
 
 
-def update_plot(frame):
-    # Update TSP route
-    route = historico_rotas[frame]
-    segments = []
-    for i in range(len(route)):
-        start = CIDADES[route[i]]
-        end = CIDADES[route[(i + 1) % len(route)]]
-        segments.append([start, end])
-    active_edges.set_segments(segments)
+def atualizar_grafico(frame):
+    # Atualizar rota TSP
+    rota = historico_rotas[frame]
+    segmentos = []
+    for i in range(len(rota)):
+        inicio = CIDADES[rota[i]]
+        fim = CIDADES[rota[(i + 1) % len(rota)]]
+        segmentos.append([inicio, fim])
+    arestas_ativas.set_segments(segmentos)
     titulo.set_text(
-        f"Geração: {frame + 1} | Distância: {historico_distancias[frame]:.2f}"
+        f"Geração: {frame + 1} | Melhor: {historico_distancias[frame]:.2f} | Pior: {historico_pior_distancias[frame]:.2f}"
     )
 
-    # Update evolution chart
-    current_marker.set_xdata([frame + 1, frame + 1])
+    # Atualizar gráfico de evolução
+    marcador_atual.set_xdata([frame + 1, frame + 1])
     fig2.canvas.draw_idle()
 
-    # Redraw both figures
+    # Redesenhar ambas as figuras
     fig1.canvas.draw_idle()
     fig2.canvas.draw_idle()
 
 
 def play(event):
-    global is_playing
-    is_playing = True
-    animate()
+    global reproduzindo
+    reproduzindo = True
+    animar()
 
 
 def pause(event):
-    global is_playing
-    is_playing = False
+    global reproduzindo
+    reproduzindo = False
 
 
-def animate():
-    global current_frame, is_playing
-    if is_playing and current_frame < len(historico_rotas) - 1:
-        current_frame += 1
-        generation_slider.set_val(current_frame)
+def animar():
+    global frame_atual, reproduzindo
+    if reproduzindo and frame_atual < len(historico_rotas) - 1:
+        frame_atual += 1
+        slider_geracao.set_val(frame_atual)
         plt.pause(0.1)
-        animate()
+        animar()
 
 
 # Conectar eventos
-generation_slider.on_changed(update_slider)
-play_button.on_clicked(play)
-pause_button.on_clicked(pause)
+slider_geracao.on_changed(atualizar_slider)
+botao_play.on_clicked(play)
+botao_pause.on_clicked(pause)
 
 # Mostrar resultado final
 print("Melhor rota encontrada:", solucao)
 print("Menor distância encontrada:", historico_distancias[-1])
+print("Maior distância encontrada:", historico_pior_distancias[-1])
 
 # Inicializar com a primeira geração
-update_plot(0)
+atualizar_grafico(0)
 
 # Mostrar ambas as janelas
 plt.show()
