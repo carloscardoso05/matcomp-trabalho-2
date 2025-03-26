@@ -3,9 +3,6 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from mpl_toolkits.mplot3d import Axes3D
 
-# ===========================
-#   1) Griewank Definition
-# ===========================
 def griewank_2d(x, y):
     """
     Computes the 2D Griewank function at (x, y).
@@ -19,9 +16,6 @@ def griewank_vector(v):
     x, y = v
     return griewank_2d(x, y)
 
-# ===================================
-#   2) Create Mesh for 3D Plotting
-# ===================================
 def create_griewank_mesh(xmin=-10, xmax=10, ymin=-10, ymax=10, points=200):
     x_vals = np.linspace(xmin, xmax, points)
     y_vals = np.linspace(ymin, ymax, points)
@@ -29,9 +23,6 @@ def create_griewank_mesh(xmin=-10, xmax=10, ymin=-10, ymax=10, points=200):
     Z = griewank_2d(X, Y)
     return X, Y, Z
 
-# =====================================
-#   3) Differential Evolution (DE)
-# =====================================
 def differential_evolution_griewank(
     num_individuals=30,
     max_iter=50,
